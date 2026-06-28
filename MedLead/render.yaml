@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: optileads
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: FLASK_SECRET_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0

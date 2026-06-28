@@ -1,0 +1,10 @@
+.env
+leads.json
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+frontend/node_modules/
+frontend/build/
+.DS_Store
