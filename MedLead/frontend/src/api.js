@@ -1,10 +1,10 @@
 const BASE = "/api";
 
-export async function searchLeads(city, category, search_mode = "city") {
+export async function searchLeads(city, category, search_mode = "city", radius_km = null) {
   const res = await fetch(`${BASE}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ city, category, search_mode }),
+    body: JSON.stringify({ city, category, search_mode, radius_km }),
   });
   return res.json();
 }

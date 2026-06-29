@@ -14,12 +14,21 @@ const CATEGORIES = [
 ];
 
 const PRIORITY_FILTER = ["ALL", "HIGH", "MEDIUM", "LOW"];
+const DISTANCE_OPTIONS = [
+  { label: "Auto", value: "" },
+  { label: "1 km",  value: 1 },
+  { label: "3 km",  value: 3 },
+  { label: "5 km",  value: 5 },
+  { label: "10 km", value: 10 },
+];
 
 export default function SearchPage() {
   const [searchMode, setSearchMode] = useState("city");
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("general_eye");
+  const [radiusKm, setRadiusKm] = useState("");
   const [leads, setLeads] = useState([]);
+  const [searchedRadius, setSearchedRadius] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
@@ -34,11 +43,12 @@ export default function SearchPage() {
     setSearched(false);
     setLeads([]);
     try {
-      const data = await searchLeads(location, category, searchMode);
+      const data = await searchLeads(location, category, searchMode, radiusKm || null);
       if (data.error) {
         setError(data.error);
       } else {
         setLeads(data.leads || []);
+        setSearchedRadius(data.radius_km ?? null);
         setSearched(true);
       }
     } catch {
@@ -112,7 +122,7 @@ export default function SearchPage() {
               className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#17A589]/60 focus:border-[#17A589]"
             />
             {searchMode === "pincode" && (
-              <p className="text-xs text-gray-400 mt-1">Searches within 5 km of this pincode</p>
+              <p className="text-xs text-gray-400 mt-1">Searches within 3 km of this pincode</p>
             )}
           </div>
           <div className="sm:w-72">
@@ -124,6 +134,18 @@ export default function SearchPage() {
             >
               {CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:w-32">
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Distance</label>
+            <select
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(e.target.value ? Number(e.target.value) : "")}
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#17A589]/60 bg-white"
+            >
+              {DISTANCE_OPTIONS.map((d) => (
+                <option key={d.value} value={d.value}>{d.label}</option>
               ))}
             </select>
           </div>
@@ -158,7 +180,12 @@ export default function SearchPage() {
       {searched && (
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-gray-600 font-medium">{leads.length} leads found</span>
+            <span className="text-sm text-gray-600 font-medium">
+              {leads.length} leads found
+              {searchedRadius != null && (
+                <span className="ml-1 text-gray-400 font-normal">within {searchedRadius} km</span>
+              )}
+            </span>
             <div className="flex gap-1.5 ml-2">
               {PRIORITY_FILTER.map((p) => (
                 <button

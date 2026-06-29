@@ -146,25 +146,45 @@ def geocode_city(city):
     return loc["lat"], loc["lng"]
 
 
-def search_places(query, location_label, lat, lng, radius_m=15000):
-    places_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+METRO_CITIES = {
+    "bangalore", "bengaluru", "mumbai", "delhi", "new delhi",
+    "chennai", "hyderabad", "pune", "kolkata", "calcutta",
+}
+
+def resolve_radius(raw_query, search_mode, override_km=None):
+    """Return radius in metres based on query type, with optional frontend override."""
+    if override_km:
+        return int(override_km * 1000)
+    if search_mode == "pincode":
+        return 3000
+    # 6-digit pincode typed into the city field
+    if raw_query.strip().isdigit() and len(raw_query.strip()) == 6:
+        return 3000
+    if raw_query.strip().lower() in METRO_CITIES:
+        return 10000
+    return 3000
+
+
+def search_places(keyword, lat, lng, radius_m):
+    """Nearby Search strictly respects the radius parameter."""
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
     all_results = []
     next_page_token = None
 
     for page in range(2):
         params = {
-            "query": f"{query} in {location_label}",
             "location": f"{lat},{lng}",
             "radius": radius_m,
+            "keyword": keyword,
             "key": GOOGLE_API_KEY,
         }
         if next_page_token:
             params["pagetoken"] = next_page_token
 
-        resp = requests.get(places_url, params=params)
+        resp = requests.get(url, params=params)
         data = resp.json()
         count = len(data.get("results", []))
-        print(f"[PLACES] query='{query} in {location_label}' page={page+1} status={data.get('status')} results={count} error={data.get('error_message', '')}")
+        print(f"[NEARBY] keyword='{keyword}' radius={radius_m}m page={page+1} status={data.get('status')} results={count} error={data.get('error_message', '')}")
         all_results.extend(data.get("results", []))
         next_page_token = data.get("next_page_token")
         if not next_page_token:
@@ -221,14 +241,11 @@ def search():
     if not GOOGLE_API_KEY or GOOGLE_API_KEY == "your_google_places_api_key_here":
         return jsonify({"error": "Google Places API key not configured"}), 500
 
-    if search_mode == "pincode":
-        geocode_query = f"{raw_query} India"
-        radius_m = 5000
-    else:
-        geocode_query = raw_query
-        radius_m = 15000
+    override_km = body.get("radius_km")  # optional frontend override
+    geocode_query = f"{raw_query} India" if search_mode == "pincode" else raw_query
+    radius_m = resolve_radius(raw_query, search_mode, override_km)
 
-    print(f"\n[SEARCH] mode={search_mode} query='{raw_query}' category='{category}'")
+    print(f"\n[SEARCH] mode={search_mode} query='{raw_query}' category='{category}' radius={radius_m}m")
     center_lat, center_lng = geocode_city(geocode_query)
     if center_lat is None:
         return jsonify({"error": f"Could not find location: {raw_query}"}), 400
@@ -238,7 +255,7 @@ def search():
     all_places = []
 
     for kw in keywords:
-        results = search_places(kw, raw_query, center_lat, center_lng, radius_m)
+        results = search_places(kw, center_lat, center_lng, radius_m)
         for r in results:
             pid = r.get("place_id")
             if pid and pid not in seen_ids:
@@ -255,7 +272,7 @@ def search():
     for p in all_places:
         place_id = p.get("place_id", "")
         name = p.get("name", "Unknown")
-        address = p.get("formatted_address", "")
+        address = p.get("vicinity") or p.get("formatted_address", "")
         rating = p.get("rating")
         total_ratings = p.get("user_ratings_total", 0)
         types = p.get("types", [])
@@ -287,7 +304,7 @@ def search():
         })
 
     leads.sort(key=lambda x: ({"HIGH": 0, "MEDIUM": 1, "LOW": 2}[x["priority"]], x.get("distance_km") or 999))
-    return jsonify({"leads": leads, "city": raw_query, "category": category})
+    return jsonify({"leads": leads, "city": raw_query, "category": category, "radius_km": radius_m / 1000})
 
 
 @app.route("/api/details/<place_id>", methods=["GET"])
